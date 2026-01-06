@@ -1,0 +1,88 @@
+##########################################
+### onVisible_timer: OnTimerStart ########
+
+Set(startRun, true); ClearCollect(runStatus, ForAll(["onVisible", "collect data", "set defaults"], { name: Value, status: 0, error: 0 }));
+Set(adminCheck, Blank()); Set(adminView, Blank());
+
+Set(rvbTheme, { colors: { primary: RGBA(0, 92, 153, 1), secondary: RGBA(69, 154, 201, 1), tertiary: RGBA(190, 249, 8, 1), dark: RGBA(17, 38, 63, 1) } });
+    UpdateIf(runStatus, name = "onVisible", { status: 1 });
+
+ClearCollect(groupData, 'Advisory Group'); 
+    UpdateIf(runStatus, name = "onVisible", { status: 2, error: If(CountRows(groupData) = 0, error + 1, error) });
+    
+Set(userInfo, LookUp(groupData, _TeamsID = Text(User().EntraObjectId), ThisRecord));
+    UpdateIf(runStatus, name = "onVisible", { status: 3, error: If(IsBlank(userInfo), error + 1, error) });
+
+Set(adminCheck, userInfo.Admin);
+    UpdateIf(runStatus, name = "onVisible", { status: 4, error: If(IsBlank(adminCheck), error + 1, error) });
+
+If(!IsBlank(ComboBox1.Selected), Set(userInfo, ComboBox1.Selected));
+
+Set(versionCheck, And(
+    version_1.currentVersion = LookUp(ocm_metadata, refID = "dataLoad", value),
+    versionMain.currentVersion = LookUp(ocm_metadata, refID = "mainScreen", value))
+); UpdateIf(runStatus, name = "onVisible", { status: 5, error: If(IsBlank(versionCheck), error + 1, error) });
+
+If(versionCheck, Select(collectData_button));
+
+##########################################
+### collectData_button: OnSelect #########
+
+ClearCollect(itemData, AddColumns(If(CheckboxCanvas2.Checked, 'OCM Submissions', Filter('OCM Submissions', _testItem = false)), 
+roleTypes, Ungroup(Table(
+    { type: "Owner", userID: data.f_getUser("", Owner.Claims) },
+    ForAll(Split(Stakeholders, ";"), { type: "Stakeholder", userID: data.f_getUser(Value, "") }),
+    ForAll(Split(Consulted, ";"), { type: "Consulted", userID: data.f_getUser(Value, "") }),
+    ForAll(Split(Notified, ";"), { type: "Notified", userID: data.f_getUser(Value, "") }),
+    ForAll(Split(OversightResponse, ";"), { type: "Oversight", subtype: Last(Split(Value, "-")).Value, userID: data.f_getUser(First(Split(Value, "-")).Value, "") })
+), type), userRole, ""));
+
+ForAll(itemData, UpdateIf(itemData, ThisRecord.ID = ID, { userRole: If(IsBlank(LookUp(roleTypes, userID.ID = userInfo.ID, type)), "FYI Only", LookUp(roleTypes, userID.ID = userInfo.ID, type)) }));
+
+ClearCollect(responseData, 'Response Tracker');
+ClearCollect(taskData, ocm_tasks);
+ClearCollect(notifData, ocm_notifications);
+
+UpdateIf(runStatus, name = "collect data", { status: If(CountRows(itemData) > 0, 1) + If(CountRows(responseData) > 0, 1), error: If(CountRows(itemData) = 0, 1) + If(CountRows(responseData) = 0, 1) });
+
+UpdateIf(runStatus, name = "collect data", { status: If(CountRows(taskData) > 0, 3), error: If(CountRows(taskData) = 0, error + 1, error) });
+Select(setDefaults_button);
+
+##########################################
+### setDefaults_button: OnSelect #########
+
+Set(viewScreen, "main");
+    UpdateIf(runStatus, name = "set defaults", { status: 1, error: If(IsBlank(viewScreen), error + 1, error) });
+
+Set(itemSort, { type: "Item Title", dir: 1 });
+    UpdateIf(runStatus, name = "set defaults", { status: status + 1, error: If(IsBlank(itemSort), error + 1, error) });
+
+Set(notifSort, SortOrder.Ascending);
+
+Set(fontSize, 1);
+    UpdateIf(runStatus, name = "set defaults", { status: status + 1, error: If(IsBlank(fontSize), error + 1, error) });
+
+Set(viewItem, Blank());
+    UpdateIf(runStatus, name = "set defaults", { status: status + 1, error: If(!IsBlank(viewItem), error + 1, error) });
+    
+Set(stopRun, If(adminCheck, stopRun, false));
+
+ClearCollect(filterData, data.filterData); UpdateIf(runStatus, name = "set defaults", { status: status + 1, error: If(CountRows(filterData) = 0, error + 1, error) });
+
+ForAll(Sequence(CountRows(filterData), 1, 1), UpdateIf(filterData, And(type = Index(filterData, Value).type, option = Index(filterData, Value).option), { fID: Value }));
+UpdateIf(runStatus, name = "set defaults", { status: status + 1, error: If(CountRows(filterData) = 0, error + 1, error) });
+
+ClearCollect(originalFilters, data.filterData); UpdateIf(runStatus, name = "set defaults", { status: status + 1, error: If(CountRows(originalFilters) = 0, error + 1, error) });
+
+ForAll(Sequence(CountRows(originalFilters), 1, 1), UpdateIf(originalFilters, And(type = Index(originalFilters, Value).type, option = Index(originalFilters, Value).option), { fID: Value }));UpdateIf(runStatus, name = "set defaults", { status: status + 1, error: If(CountRows(originalFilters) = 0, error + 1, error) });
+
+ClearCollect(showHide, 
+    { object: "sidebar", status: true, comment: "" },
+    { object: "itemDetails", status: true, comment: "view item details screen" },
+    { object: "assignments", status: true, comment: "view item details screen" },
+    { object: "assessments", status: true, comment: "view item details screen" },
+    { object: "currentTasks", status: true },
+    { object: "allItems", status: true }
+); UpdateIf(runStatus, name = "set defaults", { status: status + 1, error: If(CountRows(showHide) = 0, error + 1, error) });
+
+Select(ButtonCanvas3_5);
